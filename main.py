@@ -24,7 +24,8 @@ JWT_ALGORITHM=os.getenv("JWT_ALGORITHM")
 JWT_EXPIRY_SECONDS=3600
 
 #MongoDB setup
-mongo_client = MongoClient("mongodb+srv://tanuj26rajput:Dh%40wanshikhar1@gadgetry.6rlmclf.mongodb.net/?retryWrites=true&w=majority&appName=gadgetry")
+MONGO_URI=os.getenv("MONGO_URI")
+mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["gadgetry"]
 session_collection = db["sessions"]
 user_collection = db['users']
@@ -37,7 +38,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://gadgetryai.netlify.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
