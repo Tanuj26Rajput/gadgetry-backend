@@ -7,9 +7,7 @@ import re
 import requests
 import json
 from dotenv import load_dotenv
-from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
-import torch
-import torch.nn.functional as F
+from huggingface_hub import InferenceClient
 import os
 import uuid
 from pymongo import MongoClient
@@ -17,10 +15,7 @@ from pymongo import MongoClient
 load_dotenv()
 
 # sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert/distilbert-base-uncased-finetuned-sst-2-english")
-torch.set_num_threads(1)
-tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
-model_sentiment = AutoModelForSequenceClassification.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
-model_sentiment.eval()
+inference_client = InferenceClient(model="cardiffnlp/twitter-roberta-base-sentiment")
 
 llm = HuggingFaceEndpoint(
     repo_id="Qwen/Qwen3-Coder-480B-A35B-Instruct",
@@ -157,32 +152,25 @@ def fetch_reviews(asin: str) -> List[str]:
         return []
     
 def analyze_sentiment_bulk(reviews: List[str]) -> dict:
-    # if not reviews:
-    #     return {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
-    sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}        
-    # try:
-    #     results = sentiment_pipeline(reviews)
-    #     for r in results:
-    #         label = r["label"].lower()
-    #         if label in sentiment_counts:
-    #             sentiment_counts[label]+=1
-    # except Exception as e:
-    #     print("Local sentiment error: ", e)
+    if not reviews:
+        return {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
+
+    sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
     try:
         for review in reviews:
-            inputs = tokenizer(review, return_tensors="pt", truncation=True, max_length=512)
-            with torch.no_grad():
-                logits = model_sentiment(**inputs).logits
-                probs = F.softmax(logits, dim=1)
-                label = torch.argmax(probs).item()
-            if label == 1:
+            if not review:
+                continue
+            output = inference_client.text_classification(review)
+            label = output[0].label
+            if label == "LABEL_2":
                 sentiment_counts["positive"]+=1
-            else:
+            elif label == "LABEL_1":
+                sentiment_counts["neutral"]+=1
+            elif label == "LABEL_0":
                 sentiment_counts["negative"]+=1
     except Exception as e:
-        print("Sentiment analysis error: ", e)
-
-    sentiment_counts['total'] = sentiment_counts["positive"] + sentiment_counts["negative"]
+        print("Remote sentiment analysis error: ", e)
+    sentiment_counts["total"] = sum(sentiment_counts.values())
     return sentiment_counts
 
 def route_query(state: agentstate) -> str:
@@ -377,4 +365,5 @@ workflow = graph.compile()
 #     state['query'] = user_input
 #     result = workflow.invoke(state)
 #     print("\n🤖 Assistant:", result["recommendation"])
+
 
