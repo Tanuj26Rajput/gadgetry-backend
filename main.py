@@ -24,7 +24,7 @@ JWT_ALGORITHM=os.getenv("JWT_ALGORITHM")
 JWT_EXPIRY_SECONDS=3600
 
 #MongoDB setup
-mongo_client = MongoClient("mongodb://localhost:27017/")
+mongo_client = MongoClient("mongodb+srv://tanuj26rajput:Dh@wanshikhar1@gadgetry.6rlmclf.mongodb.net/?retryWrites=true&w=majority&appName=gadgetry")
 db = mongo_client["gadgetry"]
 session_collection = db["sessions"]
 user_collection = db['users']
@@ -296,4 +296,5 @@ def google_callback(request: Request):
 
     # Redirect or respond with session info
     return RedirectResponse(f"https://gadgetryai.netlify.app/index.html?token={token}", status_code=302)
+
 
