@@ -295,4 +295,5 @@ def google_callback(request: Request):
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
     # Redirect or respond with session info
-    return RedirectResponse(f"http://localhost:5500/frontend/index.html?token={token}", status_code=302)
+    return RedirectResponse(f"https://gadgetryai.netlify.app/index.html?token={token}", status_code=302)
+
