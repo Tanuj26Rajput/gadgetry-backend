@@ -8,4 +8,5 @@ requests
 transformers
 huggingface_hub
 langchain-huggingface
+torch
 pymongo
