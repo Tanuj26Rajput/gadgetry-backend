@@ -2,7 +2,7 @@ fastapi
 uvicorn
 pydantic
 python-dotenv
-pymongo
+pymongo[srv]
 bcrypt
 python-jose
 requests
@@ -11,3 +11,4 @@ langchain
 langchain-core
 langchain-huggingface
 huggingface_hub
+
