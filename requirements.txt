@@ -8,3 +8,4 @@ requests
 huggingface_hub
 langchain-huggingface
 pymongo
+bcrypt
