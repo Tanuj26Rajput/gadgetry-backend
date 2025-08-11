@@ -14,12 +14,12 @@ from pymongo import MongoClient
 
 load_dotenv()
 
-# sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert/distilbert-base-uncased-finetuned-sst-2-english")
 inference_client = InferenceClient(model="cardiffnlp/twitter-roberta-base-sentiment")
 
 llm = HuggingFaceEndpoint(
     repo_id="Qwen/Qwen3-Coder-480B-A35B-Instruct",
     task="text-generation",
+    api_key=os.getenv("FIREWORKS_API_KEY")
 )
 model = ChatHuggingFace(llm=llm)
 
