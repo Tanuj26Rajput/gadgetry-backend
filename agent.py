@@ -7,7 +7,6 @@ import re
 import requests
 import json
 from dotenv import load_dotenv
-from transformers import pipeline
 import os
 import uuid
 from pymongo import MongoClient
