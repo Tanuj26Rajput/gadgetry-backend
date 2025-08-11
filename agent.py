@@ -18,8 +18,7 @@ inference_client = InferenceClient(model="cardiffnlp/twitter-roberta-base-sentim
 
 llm = HuggingFaceEndpoint(
     repo_id="Qwen/Qwen3-Coder-480B-A35B-Instruct",
-    task="text-generation",
-    api_key=os.getenv("HUGGINGFACEHUB_API_KEY")
+    task="text-generation"
 )
 model = ChatHuggingFace(llm=llm)
 
