@@ -11,4 +11,4 @@ langchain
 langchain-core
 langchain-huggingface
 huggingface_hub
-
+google-genai

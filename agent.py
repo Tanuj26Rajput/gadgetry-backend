@@ -7,24 +7,55 @@ import re
 import requests
 import json
 from dotenv import load_dotenv
-from huggingface_hub import InferenceClient
+from transformers import pipeline
 import os
 import uuid
 from pymongo import MongoClient
+from google import genai
 
 load_dotenv()
 
-inference_client = InferenceClient(model="cardiffnlp/twitter-roberta-base-sentiment")
+client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-llm = HuggingFaceEndpoint(
-    repo_id="Qwen/Qwen3-Coder-480B-A35B-Instruct",
-    task="text-generation"
-)
-model = ChatHuggingFace(llm=llm)
+def gemi_invoke(prompt: str) -> str:
+    try:
+        response = client_gemini.models.generate_content(
+            model = "gemini-2.0-flash",
+            contents=prompt
+        )
+        return response.text.strip()
+    except Exception as e:
+        print("Gemini API Error: ", e)
+        return ""
+    
+def gemini_sentiment_analysis(reviews: List[str]) -> dict:
+    if not reviews:
+        return {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
+    
+    joined_reviews = "\n".join([f"- {r}" for r in reviews])
 
-client = MongoClient("mongodb://localhost:27017/")
-db = client["gadgetry"]
-session_collection = db["session_data"]
+    prompt = f"""
+        You are a sentiment classifier.
+        Classify each review below as Positive, Negative, or Neutral.
+        Return a JSON object strictly in this format:
+        {{
+            "positive": <count>,
+            "negative": <count>,
+            "neutral": <count>,
+            "total": <count>
+        }}
+
+        Reviews:
+        {joined_reviews}
+    """
+
+    try:
+        result_text = gemi_invoke(prompt)
+        parsed = json.loads(result_text)
+        return parsed
+    except Exception as e:
+        print("Sentiment analysis error: ", e)
+        return {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
 
 class agentstate(TypedDict):
     query: str
@@ -149,33 +180,13 @@ def fetch_reviews(asin: str) -> List[str]:
     except Exception as e:
         print("Review fetch error: ", e)
         return []
-    
-def analyze_sentiment_bulk(reviews: List[str]) -> dict:
-    if not reviews:
-        return {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
-
-    sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
-    try:
-        for review in reviews:
-            if not review:
-                continue
-            output = inference_client.text_classification(review)
-            label = output[0].label
-            if label == "LABEL_2":
-                sentiment_counts["positive"]+=1
-            elif label == "LABEL_1":
-                sentiment_counts["neutral"]+=1
-            elif label == "LABEL_0":
-                sentiment_counts["negative"]+=1
-    except Exception as e:
-        print("Remote sentiment analysis error: ", e)
-    sentiment_counts["total"] = sum(sentiment_counts.values())
-    return sentiment_counts
 
 def route_query(state: agentstate) -> str:
-    query = state["query"]
-    response = model.invoke(prompt_classifier.format(query=query))
-    return response.content.strip().lower()
+    result = gemi_invoke(prompt_classifier.format(query=state["query"])).lower()
+    result = result.strip().lower()
+    if result not in ["informational", "recommendational"]:
+        result = "informational"
+    return result
 
 def classify_query_node(state: agentstate) -> agentstate:
     return state
@@ -184,21 +195,17 @@ def detect_followup_node(state: agentstate) -> agentstate:
     return state
 
 def handle_informational(state: agentstate) -> agentstate:
-    response = model.invoke(f"User asked: {state['query']}\nAnswer in a helpful and technical but simple way.")
-    state['recommendation'] = response.content.strip()
+    state["recommendation"] = gemi_invoke(f"User asked: {state['query']}\nAnswer clearly and simply.")
     return state
 
 def detect_followup(state: agentstate) -> str:
-    response = model.invoke(prompt_followup.format(query=state['query']))
-    return response.content.strip().lower()
+    return gemi_invoke(prompt_followup.format(query=state['query'])).lower()
 
 def for_extracting(state: agentstate) -> agentstate:
-    prompt_for_extracting = prompt_extract.format(query=state['query'])
-    response = model.invoke(prompt_for_extracting)
+    response_text = gemi_invoke(prompt_extract.format(query=state['query']))
     try:
-        parsed = json.loads(response.content)
+        parsed = json.loads(response_text)
     except json.JSONDecodeError:
-        print("❌ JSON Parsing failed. Response:", response.content)
         parsed = {"budget": 0, "category": "unknown", "usecase": "GENERAL"}
     state["budget"] = int(parsed.get("budget", 0))
     state["product"] = parsed.get("category", "unknown")
@@ -224,7 +231,6 @@ def product(state: agentstate) -> agentstate:
     }
     
     filtered_products = []
-    
     try:
         response = requests.get(url, headers=headers, params=params)
         data = response.json()
@@ -239,7 +245,7 @@ def product(state: agentstate) -> agentstate:
                 continue
 
             reviews = fetch_reviews(asin)
-            sentiment = analyze_sentiment_bulk(reviews)
+            sentiment = gemini_sentiment_analysis(reviews)
 
             product_info = {
                 "title": p.get("product_title"),
@@ -281,8 +287,8 @@ def recommendation(state: agentstate) -> agentstate:
         product_list=product_list_str
     )
 
-    response = model.invoke(prompt_text)
-    output = response.content.strip()
+    response = gemi_invoke(prompt_text)
+    output = response.strip()
 
     state['recommendation'] = output
     return state
@@ -313,7 +319,7 @@ def handle_followup(state: agentstate) -> agentstate:
 
             Respond appropriately:
         '''
-    response = model.invoke(prompt)
+    response = gemi_invoke(prompt)
     state['recommendation'] = response.content.strip()
     return state
 
@@ -364,5 +370,3 @@ workflow = graph.compile()
 #     state['query'] = user_input
 #     result = workflow.invoke(state)
 #     print("\n🤖 Assistant:", result["recommendation"])
-
-
