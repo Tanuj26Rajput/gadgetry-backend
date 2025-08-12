@@ -1,15 +1,11 @@
-from typing import TypedDict, Literal, List, Annotated, NotRequired
-from pydantic import Field
+from typing import TypedDict, List
 from langgraph.graph import StateGraph, START, END
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langchain_core.prompts import PromptTemplate
 import re
 import requests
 import json
 from dotenv import load_dotenv
 import os
-import uuid
-from pymongo import MongoClient
 from google import genai
 
 load_dotenv()
@@ -182,9 +178,6 @@ def fetch_reviews(asin: str) -> List[str]:
 
 def route_query(state: agentstate) -> str:
     result = gemi_invoke(prompt_classifier.format(query=state["query"])).lower()
-    result = result.strip().lower()
-    if result not in ["informational", "recommendational"]:
-        result = "informational"
     return result
 
 def classify_query_node(state: agentstate) -> agentstate:
@@ -198,12 +191,22 @@ def handle_informational(state: agentstate) -> agentstate:
     return state
 
 def detect_followup(state: agentstate) -> str:
-    return gemi_invoke(prompt_followup.format(query=state['query'])).lower()
+    result = gemi_invoke(prompt_followup.format(query=state['query'])).lower()
+    result = result.strip().lower()
+    if result not in ["new", "followup"]:
+        result = "new"
+    return result
 
 def for_extracting(state: agentstate) -> agentstate:
     response_text = gemi_invoke(prompt_extract.format(query=state['query']))
+    if response_text.startswith("```json"):
+        lines = response_text.splitlines()
+        json_lines = [line for line in lines if line.strip() not in ("```json", "```")]
+        clean_response_text = "\n".join(json_lines)
+    else:
+        clean_response_text = response_text
     try:
-        parsed = json.loads(response_text)
+        parsed = json.loads(clean_response_text)
     except json.JSONDecodeError:
         parsed = {"budget": 0, "category": "unknown", "usecase": "GENERAL"}
     state["budget"] = int(parsed.get("budget", 0))
@@ -212,58 +215,60 @@ def for_extracting(state: agentstate) -> agentstate:
     return state
 
 def product(state: agentstate) -> agentstate:
+    query_str = f"{state['product']} for {state['category']}"
+
+    budget = int(state.get('budget', 0))
+    budget_buffer = int(budget*1.1) if budget else 0
+
     url = "https://real-time-amazon-data.p.rapidapi.com/search"
     headers = {
         "x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
         "x-rapidapi-host": "real-time-amazon-data.p.rapidapi.com"
     }
 
-    params = {
-        "query": f"{state['category']} {state['product']}",
-        "page": "1",
-        "country": "IN", 
-        "sort_by": "RELEVANCE",
-        "max_price": state['budget'], 
-        "product_condition": "ALL", 
-        "is_prime": "false",
-        "deals_and_discounts": "NONE"
-    }
+    def for_params(max_price=None):
+        params = {
+            "query": query_str,
+            "page": 1,
+            "country": "IN",
+            "sort_by": "RELEVANCE",
+            "product_condition": "ALL"
+        }
+        if max_price and max_price > 0:
+            params['max_price'] = max_price
+        return params
     
-    filtered_products = []
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        data = response.json()
-        results = data.get("data", {}).get("products", [])
+    params = for_params(budget_buffer)
 
-        print(f"\n🔍 DEBUG: Found {len(results)} raw products")
+    response = requests.get(url, headers=headers, params=params)
+    data = response.json()
+    results = data.get("data", {}).get("products", [])
 
-        for p in results:
-            product_url = p.get("product_url")
-            asin = extract_asin(product_url)
-            if not asin:
-                continue
+    filtered_product = []
+    print(f"\n🔍 DEBUG: Found {len(results)} raw products")
+    for p in results:
+        product_url = p.get("product_url")
+        asin = extract_asin(product_url)
+        if not asin:
+            continue
 
-            reviews = fetch_reviews(asin)
-            sentiment = gemini_sentiment_analysis(reviews)
+        reviews = fetch_reviews(asin)
+        sentiment = gemini_sentiment_analysis(reviews)
+        product_info = {
+            "title": p.get("product_title"),
+            "price": p.get("product_minimum_offer_price"),
+            "original_price": p.get("product_original_price", "N/A"),
+            "url": p.get("product_url"),
+            "rating": p.get("product_star_rating", "N/A"),
+            "image": p.get("product_photo", "N/A"),
+            "asin": asin,
+            "review_sentiment": sentiment
+        }
 
-            product_info = {
-                "title": p.get("product_title"),
-                "price": p.get("product_minimum_offer_price"),
-                "original_price": p.get("product_original_price", "N/A"),
-                "url": p.get("product_url"),
-                "rating": p.get("product_star_rating", "N/A"),
-                "image": p.get("product_photo", "N/A"),
-                "asin": asin,
-                "review_sentiment": sentiment
-            }
+        print("🆕 Product:", product_info["title"])
+        filtered_product.append(product_info)
 
-            print("🆕 Product:", product_info["title"])
-            filtered_products.append(product_info)
-
-    except Exception as e:
-        print("API ERROR", e)
-    
-    state["product_list"] = filtered_products
+    state['product_list'] = filtered_product
     return state
 
 def recommendation(state: agentstate) -> agentstate:
@@ -319,7 +324,7 @@ def handle_followup(state: agentstate) -> agentstate:
             Respond appropriately:
         '''
     response = gemi_invoke(prompt)
-    state['recommendation'] = response.content.strip()
+    state['recommendation'] = response.strip()
     return state
 
 graph = StateGraph(agentstate)
@@ -349,23 +354,23 @@ graph.add_edge("handle_informational", END)
 
 workflow = graph.compile()
 
-# state: agentstate = {
-#     "query": "",
-#     "budget": 0,
-#     "category": "",
-#     "product": "",
-#     "product_list": [],
-#     "recommendation": ""
-# }
+state: agentstate = {
+    "query": "",
+    "budget": 0,
+    "category": "",
+    "product": "",
+    "product_list": [],
+    "recommendation": ""
+}
 
-# print("Welcome to Smart Gadget Assistant! Ask anything (type 'exit' to quit)")
+print("Welcome to Smart Gadget Assistant! Ask anything (type 'exit' to quit)")
 
-# while True:
-#     user_input = input("\n🧑 You: ")
-#     if user_input.lower() in ["exit", "quit"]:
-#         print("Goodbye!")
-#         break
+while True:
+    user_input = input("\n🧑 You: ")
+    if user_input.lower() in ["exit", "quit"]:
+        print("Goodbye!")
+        break
 
-#     state['query'] = user_input
-#     result = workflow.invoke(state)
-#     print("\n🤖 Assistant:", result["recommendation"])
+    state['query'] = user_input
+    result = workflow.invoke(state)
+    print("\n🤖 Assistant:", result["recommendation"])
