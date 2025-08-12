@@ -62,54 +62,56 @@ class agentstate(TypedDict):
 
 prompt_extract = PromptTemplate(
     template='''
-        You are helpful AI which will process the query given by the user and extract:
-        - budget (in digits only), 0 if got mentioned.
-        - product category (like laptop, mobile, etc.)
-        - use case (like gaming, editing). If no use case is mentioned, take it as "GENERAL".
+        You are a helpful AI assistant tasked with extracting details from a user's query.
 
-        Give the output strictly in this format:
+        Extract the following clearly:
+        - Budget (digits only, 0 if none mentioned),
+        - Product category (e.g., laptop, mobile, smartwatch),
+        - Intended use case (e.g., gaming, video editing, general use). If no use case is specified, use "GENERAL".
+
+        Output ONLY a valid JSON object in this exact format:
+
         {{
             "budget": "...",
             "category": "...",
             "usecase": "..."
         }}
 
-        Query: {query}
+        User query: {query}
     ''',
     input_variables=["query"]
 )
 
 prompt_recommend = PromptTemplate(
     template='''
-        You are a smart electronic gadget assistant.
+        You are an expert electronic gadget assistant providing professional and courteous recommendations.
 
-        You are given:
-        - A list of electronic products (with price, rating and review sentiment)
-        - A user's budget
-        - The product category(e.g., laptop, mobile)
-        - The user's intended use case (e.g., gaming, video editing, general use)
+        Given:
+        - A list of electronic products (with price, rating, and review sentiment),
+        - The user's budget,
+        - The product category (e.g., laptop, mobile),
+        - The user's intended use case (e.g., gaming, video editing, general use),
 
-        Your job is to:
-        1. **Analyze all products** in the list and compare them based on:
-            - Use-case scalability
-            - Review sentiment (more positive, fewer negative)
-            - Value for money (within budget, better specs for price)
-            - User ratings
-        2. **Select ONE best products** strictly from the list that best fits the user's needs.
+        Your task:
+        1. Carefully analyze the products based on:
+           - Suitability for the use case,
+           - Review sentiment (prioritize more positive, fewer negative),
+           - Value for money (products within budget with good features),
+           - User ratings and feedback.
 
-        3. Justify your choice by:
-            - Highlighting strengths of the chosen product
-            - Mentioning why it stands out over others
-            - Referencing review sentiment (e.g., "85% positive reviews") if available
+        2. Select the ONE best product from the list that fits the user's needs.
 
-        4. Finish with a friendly and confident final recommendation:
-            - Mention the product name clearly
-            - Include a short summary of why it's the best pick
+        3. Provide a clear, respectful, and concise explanation for your choice, including:
+        - Key strengths of the product,
+        - Reasons it stands out compared to other options,
+        - Summary of review sentiment (e.g., "approximately 85% positive reviews"),
+        - A confident final recommendation.
 
-        STRICT INSTRUCTIONS:
-        - Recommend only from the list.
-        - DO NOT make up products.
-        - Be concise, objective and clear.      
+        Remember:
+        - Recommend only from the given list.
+        - Do not fabricate or invent any products.
+        - Maintain a polite and professional tone.
+        - Keep your response concise and clear.
 
         Budget: {budget}
         Category: {category}
@@ -187,7 +189,14 @@ def detect_followup_node(state: agentstate) -> agentstate:
     return state
 
 def handle_informational(state: agentstate) -> agentstate:
-    state["recommendation"] = gemi_invoke(f"User asked: {state['query']}\nAnswer clearly and simply.")
+    state["recommendation"] = gemi_invoke(f"""
+        You are a polite and knowledgeable assistant.
+
+        User's question:
+        {state['query']}
+
+        Please provide a clear, respectful, and concise answer.
+    """)
     return state
 
 def detect_followup(state: agentstate) -> str:
@@ -304,8 +313,9 @@ def handle_followup(state: agentstate) -> agentstate:
     ]) if isinstance(state['product_list'], list) else "No product Found"
 
     prompt = f'''
-            You are a helpful AI assistant continuing a product recommendation conversation.
-            Below is your previous recommendation and the list of the products you analyzed:
+            You are a professional AI assistant continuing a product recommendation conversation.
+
+            Here is the previous recommendation you gave, and the product list you analyzed:
 
             Previous Recommendation:
             {state["recommendation"]}
@@ -313,16 +323,17 @@ def handle_followup(state: agentstate) -> agentstate:
             Product list:
             {product_list_str}
 
-            The user is now asking a follow-up question:
+            The user has now asked this follow-up question:
             {state["query"]}
 
-            Only use the products from the list above in your answer.
-            - Do not introduce new products.
-            - You may compare or explain choices from the list.
-            - Be clear, concise and helpful.
+            Please respond:
+            - Using only the products from the list above,
+            - Without introducing any new products,
+            - Clearly and politely addressing the user's question,
+            - Being concise and helpful.
 
-            Respond appropriately:
-        '''
+            Respond respectfully and professionally.
+        ''',
     response = gemi_invoke(prompt)
     state['recommendation'] = response.strip()
     return state
