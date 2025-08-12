@@ -60,6 +60,16 @@ class agentstate(TypedDict):
     product_list: List[dict]
     recommendation: str
 
+prompt_is_gadget = PromptTemplate(
+    template = '''
+        Check if the user query is related to electronic gadgets like laptops, mobiles, tablets, smartwatches etc
+        Respond only with "yes" or "no".
+
+        Query: {query}
+    ''',
+    input_variables=['query']
+)
+
 prompt_extract = PromptTemplate(
     template='''
         You are a helpful AI assistant tasked with extracting details from a user's query.
@@ -147,6 +157,18 @@ prompt_followup = PromptTemplate(
     ''',
     input_variables=["query"]
 )
+
+def check_is_gadget_query(state: agentstate) -> str:
+    result = gemi_invoke(prompt_is_gadget.format(query=state['query']))
+    result = result.strip().lower()
+    return result
+
+def is_gadget_query(state: agentstate) -> agentstate:
+    return state
+
+def response_to_non_gadget(state: agentstate) -> agentstate:
+    state['recommendation'] = "Sorry, I only respond to gadget-related questions."
+    return state
 
 def extract_asin(url: str) -> str:
     match = re.search(r'/dp/([A-Z0-9]{10})', url)
@@ -340,6 +362,8 @@ def handle_followup(state: agentstate) -> agentstate:
 
 graph = StateGraph(agentstate)
 
+graph.add_node("is_gadget_query", is_gadget_query)
+graph.add_node("response_to_non_gadget", response_to_non_gadget)
 graph.add_node("classify_query_node", classify_query_node)
 graph.add_node("handle_informational", handle_informational)
 graph.add_node("detect_followup_node", detect_followup_node)
@@ -348,7 +372,11 @@ graph.add_node("product", product)
 graph.add_node("recommendation", recommendation)
 graph.add_node("handle_followup", handle_followup)
 
-graph.add_edge(START, "classify_query_node")
+graph.add_edge(START, "is_gadget_query")
+graph.add_conditional_edges("is_gadget_query", check_is_gadget_query,{
+    "yes": "classify_query_node",
+    "no": "response_to_non_gadget"
+})
 graph.add_conditional_edges("classify_query_node", route_query, {
     "informational": "handle_informational",
     "recommendation": "detect_followup_node"
@@ -362,6 +390,7 @@ graph.add_edge("product", "recommendation")
 graph.add_edge("recommendation", END)
 graph.add_edge("handle_followup", END)
 graph.add_edge("handle_informational", END)
+graph.add_edge("response_to_non_gadget", END)
 
 workflow = graph.compile()
 
