@@ -38,7 +38,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://gadgetryai.netlify.app"],
+    allow_origins=["https://findmygadget.shop"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -296,7 +296,7 @@ def google_callback(request: Request):
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
     # Redirect or respond with session info
-    return RedirectResponse(f"https://gadgetryai.netlify.app/chat.html?token={token}", status_code=302)
+    return RedirectResponse(f"https://findmygadget.shop/chat.html?token={token}", status_code=302)
 
 
 
