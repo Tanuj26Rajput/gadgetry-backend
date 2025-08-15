@@ -807,23 +807,23 @@ graph.add_edge("response_to_non_gadget", END)
 
 workflow = graph.compile()
 
-state: agentstate = {
-    "query": "",
-    "budget": 0,
-    "category": "",
-    "product": "",
-    "product_list": [],
-    "recommendation": ""
-}
+# state: agentstate = {
+#     "query": "",
+#     "budget": 0,
+#     "category": "",
+#     "product": "",
+#     "product_list": [],
+#     "recommendation": ""
+# }
 
-print("Welcome to Smart Gadget Assistant! Ask anything (type 'exit' to quit)")
+# print("Welcome to Smart Gadget Assistant! Ask anything (type 'exit' to quit)")
 
-while True:
-    user_input = input("\n🧑 You: ")
-    if user_input.lower() in ["exit", "quit"]:
-        print("Goodbye!")
-        break
+# while True:
+#     user_input = input("\n🧑 You: ")
+#     if user_input.lower() in ["exit", "quit"]:
+#         print("Goodbye!")
+#         break
 
-    state['query'] = user_input
-    result = workflow.invoke(state)
-    print("\n🤖 Assistant:", result["recommendation"])
+#     state['query'] = user_input
+#     result = workflow.invoke(state)
+#     print("\n🤖 Assistant:", result["recommendation"])
