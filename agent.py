@@ -359,7 +359,7 @@ def handle_followup(state: agentstate) -> agentstate:
             - Being concise and helpful.
 
             Respond respectfully and professionally.
-        ''',
+        '''
     response = gemi_invoke(prompt)
     state['recommendation'] = response.strip()
     return state
