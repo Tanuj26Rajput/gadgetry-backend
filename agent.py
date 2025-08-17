@@ -227,7 +227,7 @@ async def product_async(state: agentstate):
     if budget_buffer > 0:
         params['max_price'] = budget_buffer
         params["min_price"] = budget * 0.7
-        state['budget'] = budget_buffer
+        # state['budget'] = budget_buffer
 
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers, params=params, timeout=15) as resp:
