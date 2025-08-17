@@ -204,7 +204,7 @@ def add_affiliate_tag(url: str, tag: str) -> str:
     sep = "&" if "?" in url else "?"
     return f"{url}{sep}tag={tag}"
 
-async def product_async(state):
+async def product_async(state: agentstate):
     if state['category'].lower() != "general":
         query_str = f"{state['product']} for {state['category']}"
     else:
@@ -222,10 +222,12 @@ async def product_async(state):
         "page": 1,
         "country": "IN",
         "sort_by": "HIGHEST_PRICE",
-        "product_condition": "ALL"
+        "product_condition": "ALL",
     }
     if budget_buffer > 0:
         params['max_price'] = budget_buffer
+        params["min_price"] = budget * 0.7
+        state['budget'] = budget_buffer
 
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers, params=params, timeout=15) as resp:
