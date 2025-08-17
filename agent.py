@@ -229,7 +229,7 @@ async def product_async(state: agentstate):
         "query": query_str,
         "page": 1,
         "country": "IN",
-        "sort_by": "BEST_SELLERS",
+        "sort_by": "RELEVANCE",
         "product_condition": "ALL",
     }
     if budget_buffer > 0:
