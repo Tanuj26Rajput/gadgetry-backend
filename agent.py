@@ -29,6 +29,7 @@ def gemi_invoke(prompt: str) -> str:
 class agentstate(TypedDict):
     query: str
     budget: int
+    budget_buffer: int
     category: str
     product: str
     product_list: List[dict]
@@ -210,7 +211,8 @@ async def product_async(state: agentstate):
     else:
         query_str = f"{state['product']}"
     budget = int(state.get('budget', 0))
-    budget_buffer = int(budget * 1.1) if budget else 0
+    budget_buffer = int(budget * 1.2) if budget else 0
+    state['budget_buffer'] = budget_buffer
 
     url = "https://real-time-amazon-data.p.rapidapi.com/search"
     headers = {
@@ -221,12 +223,12 @@ async def product_async(state: agentstate):
         "query": query_str,
         "page": 1,
         "country": "IN",
-        "sort_by": "HIGHEST_PRICE",
+        "sort_by": "RELEVANCE",
         "product_condition": "ALL",
     }
     if budget_buffer > 0:
         params['max_price'] = budget_buffer
-        params["min_price"] = budget * 0.7
+        params["min_price"] = max(0, budget * 0.7)
         # state['budget'] = budget_buffer
 
     async with aiohttp.ClientSession() as session:
@@ -325,7 +327,7 @@ def recommendation(state: agentstate) -> agentstate:
     ])
 
     prompt_text = prompt_recommend.format(
-        budget=state['budget'],
+        budget=state['budget_buffer'],
         category=state['category'],
         product=state['product'],
         product_list=product_list_str
