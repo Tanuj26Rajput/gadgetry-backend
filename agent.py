@@ -218,7 +218,7 @@ async def product_async(state):
         "query": query_str,
         "page": 1,
         "country": "IN",
-        "sort_by": "RELEVANCE",
+        "sort_by": "HIGHEST_PRICE",
         "product_condition": "ALL"
     }
     if budget_buffer > 0:
