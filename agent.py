@@ -205,7 +205,10 @@ def add_affiliate_tag(url: str, tag: str) -> str:
     return f"{url}{sep}tag={tag}"
 
 async def product_async(state):
-    query_str = f"{state['product']} for {state['category']}"
+    if state['category'].lower() != "general":
+        query_str = f"{state['product']} for {state['category']}"
+    else:
+        query_str = f"{state['product']}"
     budget = int(state.get('budget', 0))
     budget_buffer = int(budget * 1.1) if budget else 0
 
