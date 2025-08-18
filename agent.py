@@ -81,30 +81,31 @@ prompt_recommend = PromptTemplate(
         - The user's intended use case (e.g., gaming, video editing, general use),
 
         Your task:
-        1. Carefully analyze the products based on:
-           - Suitability for the use case,
+        1. Analyze the products carefully based on:
+           - Suitability for the use case
            - Review sentiment (prioritize more positive, fewer negative),
            - Prioritize products **within the original budget**,
-           - If no strong option is available within the budget, consider products slightly over budget (within the buffer).
-           - User ratings and feedback.
+           - If no strong option is available within the budget, consider products slightly over budget(within the Flexible budget),
+           - User ratings and feedbacks.
 
-        2. Select the ONE best product from the list that fits the user's needs.
+        2. Select the **Top 3 products** from the list, and clearly rank them as:
+           🥇 Best Overall - balanced choice for most users,
+           🥈 Best Value - most budget-friendly option with decent quality,
+           🥉 Premium Option - slightly over budget (if necessary) but worth it.
 
-        3. Provide a clear, respectful, and concise explanation for your choice, including:
-        - Key strengths of the product,
-        - Reasons it stands out compared to other options,
-        - Summary of review sentiment (e.g., "approximately 85% positive reviews"),
-        - A confident final recommendation.
+        3. For each recommendation, provide:
+           - Key strengths of the product,
+           - Why it stands out compared to others,
+           - Approximate percentage of positive reviews (based on given sentiment),
+           - Mention clearly whether it is "within budget" OR "slightly over budget (but worth it)".
 
-        4. Always mention clearly in your explanation if the recommended product is:
-        - "within budget" OR
-        - "slightly over budget (but worth it)".
+        4. Do not fabricate or invent products. Recommend only from the given list.
 
-        Remember:
-        - Recommend only from the given list.
-        - Do not fabricate or invent any products.
-        - Maintain a polite and professional tone.
-        - Keep your response concise and clear.
+        5. Remember:
+           - Recommend only from the given list.
+           - Do not fabricate or invent any products.
+           - Maintain a polite and professional tone.
+           - Keep your response concise and clear.
 
         Original Budget: {budget}
         Flexible Budget: {budget_buffer}
@@ -335,7 +336,7 @@ def recommendation(state: agentstate) -> agentstate:
         return state
     
     product_list_str = "\n".join([
-        f"{p['title']} | {p['price']} | {p['original_price']} | {p['rating']} | {p['review_sentiment']['positive']}👍 | {p['review_sentiment']['negative']}👎 | {p['url']}"
+        f"{p['title']} | {p['price']} | {p['original_price']} | {p['rating']}⭐ | {p['review_sentiment']['positive']}👍 | {p['review_sentiment']['negative']}👎 | {p['url']}"
         for p in state['product_list']
     ])
 
