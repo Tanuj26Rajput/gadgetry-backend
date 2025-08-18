@@ -98,6 +98,7 @@ prompt_recommend = PromptTemplate(
            - Why it stands out compared to others,
            - Approximate percentage of positive reviews (based on given sentiment),
            - Mention clearly whether it is "within budget" OR "slightly over budget (but worth it)".
+           - **DIRECT CLICKABLE PRODUCT LINK** (use the one from the product list).
 
         4. Do not fabricate or invent products. Recommend only from the given list.
 
