@@ -32,6 +32,7 @@ class agentstate(TypedDict):
     budget_buffer: int
     category: str
     product: str
+    brand: str
     product_list: List[dict]
     recommendation: str
 
@@ -53,13 +54,15 @@ prompt_extract = PromptTemplate(
         - Budget (digits only, 0 if none mentioned),
         - Product category (e.g., laptop, mobile, smartwatch),
         - Intended use case (e.g., gaming, video editing, general use). If no use case is specified, use "GENERAL".
+        - Brand name, if mentioned. If no brand mentioned return "not_mentioned".
 
         Output ONLY a valid JSON object in this exact format:
 
         {{
             "budget": "...",
             "category": "...",
-            "usecase": "..."
+            "usecase": "...",
+            "brand": "..."
         }}
 
         User query: {query}
@@ -237,6 +240,9 @@ async def product_async(state: agentstate):
         params["min_price"] = max(0, budget * 0.7)
         # state['budget'] = budget_buffer
 
+    if state['brand'] != "not_mentioned":
+        params['brand'] = state['brand']
+
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers, params=params, timeout=15) as resp:
             data = await resp.json()
@@ -314,6 +320,7 @@ def for_extracting(state: agentstate) -> agentstate:
     state["budget"] = int(parsed.get("budget", 0))
     state["product"] = parsed.get("category", "unknown")
     state["category"] = parsed.get("usecase", "GENERAL")
+    state["brand"] = parsed.get("brand", "not_mentioned")
     return state
 
 def product(state: agentstate) -> agentstate:
