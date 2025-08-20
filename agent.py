@@ -145,6 +145,15 @@ prompt_followup = PromptTemplate(
     input_variables=["query"]
 )
 
+def check_is_greeting(query: str) -> bool:
+    greetings = ["hi", "hello", "hey", "good morning", "good evening", "good afternoon"]
+    q = query.lower().strip()
+    return q in greetings
+
+def handle_greeting(state: agentstate) -> agentstate:
+    state['recommendation'] = "Hello! How can I assist you with gadgets today?"
+    return state
+
 def check_is_gadget_query(state: agentstate) -> str:
     result = gemi_invoke(prompt_is_gadget.format(query=state['query']))
     result = result.strip().lower()
@@ -398,8 +407,12 @@ graph.add_node("for_extracting", for_extracting)
 graph.add_node("product", product)
 graph.add_node("recommendation", recommendation)
 graph.add_node("handle_followup", handle_followup)
+graph.add_node("handle_greeting", handle_greeting)
 
-graph.add_edge(START, "is_gadget_query")
+graph.add_edge(START, lambda s: "greeting" if check_is_greeting(s["query"]) else "continue", {
+    "greeting": "handle_greeting",
+    "continue": "is_gadget_query"
+})
 graph.add_conditional_edges("is_gadget_query", check_is_gadget_query,{
     "yes": "classify_query_node",
     "no": "response_to_non_gadget"
