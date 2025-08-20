@@ -409,7 +409,7 @@ graph.add_node("recommendation", recommendation)
 graph.add_node("handle_followup", handle_followup)
 graph.add_node("handle_greeting", handle_greeting)
 
-graph.add_edge(START, check_is_greeting, {
+graph.add_conditional_edges(START, check_is_greeting, {
     "yes": "handle_greeting",
     "no": "is_gadget_query"
 })
