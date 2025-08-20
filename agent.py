@@ -145,9 +145,9 @@ prompt_followup = PromptTemplate(
     input_variables=["query"]
 )
 
-def check_is_greeting(query: str) -> bool:
+def check_is_greeting(state: agentstate) -> str:
     greetings = ["hi", "hello", "hey", "good morning", "good evening", "good afternoon"]
-    q = query.lower().strip()
+    q = state['query'].lower().strip()
     return "yes" if q in greetings else "no"
 
 def handle_greeting(state: agentstate) -> agentstate:
