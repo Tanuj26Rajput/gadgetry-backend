@@ -148,7 +148,7 @@ prompt_followup = PromptTemplate(
 def check_is_greeting(query: str) -> bool:
     greetings = ["hi", "hello", "hey", "good morning", "good evening", "good afternoon"]
     q = query.lower().strip()
-    return q in greetings
+    return "yes" if q in greetings else "no"
 
 def handle_greeting(state: agentstate) -> agentstate:
     state['recommendation'] = "Hello! How can I assist you with gadgets today?"
@@ -409,9 +409,9 @@ graph.add_node("recommendation", recommendation)
 graph.add_node("handle_followup", handle_followup)
 graph.add_node("handle_greeting", handle_greeting)
 
-graph.add_edge(START, lambda s: "greeting" if check_is_greeting(s["query"]) else "continue", {
-    "greeting": "handle_greeting",
-    "continue": "is_gadget_query"
+graph.add_edge(START, check_is_greeting, {
+    "yes": "handle_greeting",
+    "no": "is_gadget_query"
 })
 graph.add_conditional_edges("is_gadget_query", check_is_gadget_query,{
     "yes": "classify_query_node",
