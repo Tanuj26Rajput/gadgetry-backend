@@ -35,6 +35,7 @@ class agentstate(TypedDict):
     brand: str
     product_list: List[dict]
     recommendation: str
+    followup_answer: str
 
 prompt_is_gadget = PromptTemplate(
     template = '''
@@ -364,10 +365,9 @@ def handle_followup(state: agentstate) -> agentstate:
     prompt = f'''
             You are a professional AI assistant continuing a product recommendation conversation.
 
-            Here is the previous recommendation you gave, and the product list you analyzed:
+            Here is the previous recommendation you gave:
 
-            Previous Recommendation:
-            {state["recommendation"]}
+            {state.get("recommendation", "No previous recommendation")}
 
             Product list:
             {product_list_str}
@@ -384,7 +384,7 @@ def handle_followup(state: agentstate) -> agentstate:
             Respond respectfully and professionally.
         '''
     response = gemi_invoke(prompt)
-    state['recommendation'] = response.strip()
+    state['followup_answer'] = response.strip()
     return state
 
 graph = StateGraph(agentstate)
