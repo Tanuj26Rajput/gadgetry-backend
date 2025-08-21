@@ -15,6 +15,7 @@ from jose import JWTError, jwt
 import os
 import requests
 from uuid import uuid4
+import secrets
 
 load_dotenv()
 
@@ -91,6 +92,13 @@ def gadget_assist(request: QueryRequest, authorization: Optional[str] = Header(N
         if not user_email:
             return JSONResponse(status_code=403, content={"error": "Authentication required"})
         
+        user_doc = user_collection.find_one({"email": user_email})
+        if not user_doc:
+            return JSONResponse(status_code=403, content={"error": "User not found"})
+        
+        if not user_doc.get("is_verified", False):
+            return JSONResponse(status_code=403, content={"error": "Email not verified. Please verify your account before chatting"})
+        
         composite_session_id = f"{user_email}__{session_id}"
 
         session = session_collection.find_one({"session_id": composite_session_id})
@@ -138,42 +146,67 @@ def gadget_assist(request: QueryRequest, authorization: Optional[str] = Header(N
             content={"error": "Internal server error", "details": str(e)},
         )
     
+def generate_verification_token():
+    return secrets.token_urlsafe(32)
+
 @app.post("/signup")
 def signup(user: UserCreate):
     if user_collection.find_one({"email": user.email}):
         raise HTTPException(status_code=400, detail="Email already exist")
     
     hashed_pw = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
+    token = generate_verification_token()
 
     user_data = {
         "name": user.name,
         "email": user.email,
         "password": hashed_pw,
-        "created_at": datetime.now(timezone.utc)
+        "created_at": datetime.now(timezone.utc),
+        "token_expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+        "verification_token": token,
+        "is_verified": False
     }
-
     user_collection.insert_one(user_data)
 
-    token_data = {
-        "sub": user.email,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=12)   
-    }
-    access_token = jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    return {
-        "msg": "Signup Successful",
-        "token_type": "bearer",
-        "access_token": access_token
-    }
+    verify_link = f"https://www.findmygadget.shop/verify/{token}"
+    print(f"Verification link (send via email): {verify_link}")
+
+    # token_data = {
+    #     "sub": user.email,
+    #     "exp": datetime.now(timezone.utc) + timedelta(hours=12)   
+    # }
+    # access_token = jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    # return {
+    #     "msg": "Signup Successful",
+    #     "token_type": "bearer",
+    #     "access_token": access_token
+    # }
+    return {"msg": "Signup successfull, please verify your email before logging in."}
+
+@app.post("/verify/{token}")
+def verify_email(token: str):
+    user = user_collection.find_one({"verification_token": token})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid verification token")
+    
+    if user["token_expiry"] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Verification link expired")
+
+    user_collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"is_verified": True}, "$unset": {"verification_token": "", "token_expiry": ""}}
+    )
+    return {"msg": "Email verified successfully. You can now log in!"}
 
 @app.post("/login")
 def login(user: UserLogin):
     user_data = user_collection.find_one({"email": user.email})
 
-    if not user_data:
+    if not user_data or bcrypt.checkpw(user.password.encode('utf-8'), user_data["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    if not bcrypt.checkpw(user.password.encode('utf-8'), user_data["password"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user_data.get("is_verified", False):
+        raise HTTPException(status_code=403, detail="Email not verified. Please check your inbox.")
     
     payload = {
         "sub": str(user_data["_id"]),
