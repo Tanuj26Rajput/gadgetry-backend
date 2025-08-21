@@ -41,7 +41,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://findmygadget.shop"],
+    allow_origins=["https://www.findmygadget.shop"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
