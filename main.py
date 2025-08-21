@@ -163,7 +163,7 @@ def generate_verification_token():
     return secrets.token_urlsafe(32)
 
 async def send_verification_email(email: str, token: str):
-    verify_link = f"https://www.findmygadget.shop/verify/{token}"
+    verify_link = f"https://gadgetry-backend-production.up.railway.app/verify/{token}"
     message = MessageSchema(
         subject="Verify your FindMyGadget Account",
         recipients=[email],
