@@ -48,7 +48,7 @@ app.add_middleware(
 )
 
 conf = ConnectionConfig(
-    MAIL_USERNAME = "findmygadget.shop@gmail.com",
+    MAIL_USERNAME = os.getenv("EMAIL_USER"),
     MAIL_PASSWORD = os.getenv("EMAIL_PASS"),
     MAIL_FROM = os.getenv("EMAIL_USER"),
     MAIL_PORT = 587,
