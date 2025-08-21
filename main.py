@@ -297,15 +297,3 @@ def google_callback(request: Request):
 
     # Redirect or respond with session info
     return RedirectResponse(f"https://findmygadget.shop/chat.html?token={token}", status_code=302)
-
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "main:app",
-        host = "0.0.0.0",
-        port=int(os.environ.get("PORT", 8000)),
-        reload=False
-    )
-    
