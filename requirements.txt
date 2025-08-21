@@ -12,3 +12,4 @@ langchain-core
 google-genai
 aiohttp
 asyncio
+fastapi-mail

@@ -16,6 +16,8 @@ import os
 import requests
 from uuid import uuid4
 import secrets
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+import asyncio
 
 load_dotenv()
 
@@ -43,6 +45,17 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
+)
+
+conf = ConnectionConfig(
+    MAIL_USERNAME = "findmygadget.shop@gmail.com",
+    MAIL_PASSWORD = os.getenv("EMAIL_PASS"),
+    MAIL_FROM = os.getenv("EMAIL_USER"),
+    MAIL_PORT = 587,
+    MAIL_SERVER = "smtp.gmail.com",
+    MAIL_STARTTLS = True,
+    MAIL_SSL_TLS = False,
+    USE_CREDENTIALS = True
 )
 
 class QueryRequest(BaseModel):
@@ -149,6 +162,22 @@ def gadget_assist(request: QueryRequest, authorization: Optional[str] = Header(N
 def generate_verification_token():
     return secrets.token_urlsafe(32)
 
+async def send_verification_email(email: str, token: str):
+    verify_link = f"https://www.findmygadget.shop/verify/{token}"
+    message = MessageSchema(
+        subject="Verify your FindMyGadget Account",
+        recipients=[email],
+        body=f"""
+            <p>Hi!</p>
+            <p>Click the link below to verify your email and activate your account:</p>
+            <a href="{verify_link}">Verify Email</a>
+            <p>This link will expire in 1 hour.</p>
+        """,
+        subtype="html"
+    )
+    fm = FastMail(conf)
+    await fm.send_message(message)
+
 @app.post("/signup")
 def signup(user: UserCreate):
     if user_collection.find_one({"email": user.email}):
@@ -168,8 +197,9 @@ def signup(user: UserCreate):
     }
     user_collection.insert_one(user_data)
 
-    verify_link = f"https://www.findmygadget.shop/verify/{token}"
-    print(f"Verification link (send via email): {verify_link}")
+    # verify_link = f"https://www.findmygadget.shop/verify/{token}"
+    # print(f"Verification link (send via email): {verify_link}")
+    asyncio.create_task(send_verification_email(user.email, token))
 
     # token_data = {
     #     "sub": user.email,
@@ -336,3 +366,6 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
+
+
+# jodj yntg aqgk zscs
