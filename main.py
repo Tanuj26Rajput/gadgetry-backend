@@ -226,7 +226,7 @@ def verify_email(token: str):
         {"_id": user["_id"]},
         {"$set": {"is_verified": True}, "$unset": {"verification_token": "", "token_expiry": ""}}
     )
-    return {"msg": "Email verified successfully. You can now log in!"}
+    return RedirectResponse("https://www.findmygadget.shop/verify-success.html")
 
 @app.post("/login")
 def login(user: UserLogin):
