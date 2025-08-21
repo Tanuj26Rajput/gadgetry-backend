@@ -179,7 +179,7 @@ async def send_verification_email(email: str, token: str):
     await fm.send_message(message)
 
 @app.post("/signup")
-def signup(user: UserCreate):
+async def signup(user: UserCreate):
     if user_collection.find_one({"email": user.email}):
         raise HTTPException(status_code=400, detail="Email already exist")
     
@@ -199,7 +199,7 @@ def signup(user: UserCreate):
 
     # verify_link = f"https://www.findmygadget.shop/verify/{token}"
     # print(f"Verification link (send via email): {verify_link}")
-    asyncio.create_task(send_verification_email(user.email, token))
+    await send_verification_email(user.email, token)
 
     # token_data = {
     #     "sub": user.email,
