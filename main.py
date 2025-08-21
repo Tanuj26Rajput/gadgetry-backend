@@ -163,7 +163,7 @@ def generate_verification_token():
     return secrets.token_urlsafe(32)
 
 async def send_verification_email(email: str, token: str):
-    verify_link = f"https://gadgetry-backend-production.up.railway.app/verify/{token}"
+    verify_link = f"https://findmygadget.shop/verify.html?token={token}"
     message = MessageSchema(
         subject="Verify your FindMyGadget Account",
         recipients=[email],
@@ -219,14 +219,20 @@ def verify_email(token: str):
     if not user:
         raise HTTPException(status_code=400, detail="Invalid verification token")
     
+    if user.get("token_expiry") and user["token_expiry"] < datetime.now(timezone.utc):
+        return JSONResponse(status_code=400, content={"error": "Verification link expired"})
     if user["token_expiry"] < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Verification link expired")
 
     user_collection.update_one(
         {"_id": user["_id"]},
-        {"$set": {"is_verified": True}, "$unset": {"verification_token": "", "token_expiry": ""}}
+        {
+            "$set": {"is_verified": True}, 
+            "$unset": {"verification_token": "", "token_expiry": ""}
+        }
     )
-    return RedirectResponse("https://www.findmygadget.shop/verify-success.html")
+    # return RedirectResponse("https://www.findmygadget.shop/verify-success.html")
+    return {"message": "Email verified successfully"}
 
 @app.post("/login")
 def login(user: UserLogin):
