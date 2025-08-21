@@ -213,7 +213,7 @@ async def signup(user: UserCreate):
     # }
     return {"msg": "Signup successfull, please verify your email before logging in."}
 
-@app.post("/verify/{token}")
+@app.get("/verify/{token}")
 def verify_email(token: str):
     user = user_collection.find_one({"verification_token": token})
     if not user:
@@ -232,7 +232,7 @@ def verify_email(token: str):
 def login(user: UserLogin):
     user_data = user_collection.find_one({"email": user.email})
 
-    if not user_data or bcrypt.checkpw(user.password.encode('utf-8'), user_data["password"]):
+    if not user_data or not bcrypt.checkpw(user.password.encode('utf-8'), user_data["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     if not user_data.get("is_verified", False):
