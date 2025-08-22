@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, Header
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing import List, Optional
@@ -41,7 +41,10 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://findmygadget.shop"],
+    allow_origins=[
+        "https://findmygadget.shop",
+        "https://www.findmygadget.shop"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -163,7 +166,7 @@ def generate_verification_token():
     return secrets.token_urlsafe(32)
 
 async def send_verification_email(email: str, token: str):
-    verify_link = f"https://findmygadget.shop/verify.html?token={token}"
+    verify_link = f"https://gadgetry-backend-production.up.railway.app/verify/{token}"
     message = MessageSchema(
         subject="Verify your FindMyGadget Account",
         recipients=[email],
@@ -217,10 +220,11 @@ async def signup(user: UserCreate):
 def verify_email(token: str):
     user = user_collection.find_one({"verification_token": token})
     if not user:
-        raise HTTPException(status_code=400, detail="Invalid verification token")
+        return HTMLResponse("<h1>Invalid verification link</h1>", status_code=400)
 
     if user.get("token_expiry") and user["token_expiry"] < datetime.now(timezone.utc):
-        return JSONResponse(status_code=400, content={"success": False, "error": "Verification link expired"})
+        user_collection.update_one({"_id": user["_id"]}, {"$unset": {"verification_token": "", "token_expiry": ""}})
+        return HTMLResponse("<h1>Verification link expired</h1>", status_code=400)
 
     user_collection.update_one(
         {"_id": user["_id"]},
@@ -230,7 +234,13 @@ def verify_email(token: str):
         }
     )
 
-    return JSONResponse({"success": True, "message": "Email verified successfully!"})
+    return HTMLResponse("""
+        <html><head><title>Email Verified</title></head>
+        <body style="font-family:Arial;text-align:center;margin-top:50px;">
+            <h1 style="color:green;">✅ Email Verified Successfully!</h1>
+            <p>You can now <a href="https://findmygadget.shop/login.html">login here</a>.</p>
+        </body></html>
+    """, status_code=200)
 
 @app.post("/login")
 def login(user: UserLogin):
