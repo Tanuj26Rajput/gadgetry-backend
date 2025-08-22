@@ -166,7 +166,7 @@ def generate_verification_token():
     return secrets.token_urlsafe(32)
 
 async def send_verification_email(email: str, token: str):
-    verify_link = f"https://gadgetry-backend-production.up.railway.app/verify/{token}"
+    verify_link = f"https://findmygadget.shop/verify.html?token={token}"
     message = MessageSchema(
         subject="Verify your FindMyGadget Account",
         recipients=[email],
@@ -220,27 +220,19 @@ async def signup(user: UserCreate):
 def verify_email(token: str):
     user = user_collection.find_one({"verification_token": token})
     if not user:
-        return HTMLResponse("<h1>Invalid verification link</h1>", status_code=400)
+        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid verification link"})
 
     if user.get("token_expiry") and user["token_expiry"] < datetime.now(timezone.utc):
         user_collection.update_one({"_id": user["_id"]}, {"$unset": {"verification_token": "", "token_expiry": ""}})
-        return HTMLResponse("<h1>Verification link expired</h1>", status_code=400)
+        return JSONResponse(status_code=400, content={"success": False, "error": "Verification link expired"})
 
     user_collection.update_one(
         {"_id": user["_id"]},
-        {
-            "$set": {"is_verified": True, "verified_at": datetime.now(timezone.utc)},
-            "$unset": {"verification_token": "", "token_expiry": ""}
-        }
+        {"$set": {"is_verified": True, "verified_at": datetime.now(timezone.utc)}},
+        {"$unset": {"verification_token": "", "token_expiry": ""}}
     )
 
-    return HTMLResponse("""
-        <html><head><title>Email Verified</title></head>
-        <body style="font-family:Arial;text-align:center;margin-top:50px;">
-            <h1 style="color:green;">✅ Email Verified Successfully!</h1>
-            <p>You can now <a href="https://findmygadget.shop/login.html">login here</a>.</p>
-        </body></html>
-    """, status_code=200)
+    return JSONResponse(status_code=200, content={"success": True, "message": "Email verified successfully"})
 
 @app.post("/login")
 def login(user: UserLogin):
