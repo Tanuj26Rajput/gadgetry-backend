@@ -220,9 +220,9 @@ def verify_email(token: str):
         raise HTTPException(status_code=400, detail="Invalid verification token")
     
     if user.get("token_expiry") and user["token_expiry"] < datetime.now(timezone.utc):
-        return JSONResponse(status_code=400, content={"error": "Verification link expired"})
+        return JSONResponse(status_code=400, content={"sucess": False, "error": "Verification link expired"})
     if user["token_expiry"] < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="Verification link expired")
+        raise JSONResponse(status_code=400, content={"success": False, "error": "Verification link expired"})
 
     user_collection.update_one(
         {"_id": user["_id"]},
