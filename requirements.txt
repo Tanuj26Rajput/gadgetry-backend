@@ -13,3 +13,5 @@ google-genai
 aiohttp
 asyncio
 fastapi-mail
+pyasn1
+pyasn1_modules
