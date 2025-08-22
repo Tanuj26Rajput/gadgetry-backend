@@ -215,48 +215,22 @@ async def signup(user: UserCreate):
 
 @app.get("/verify/{token}")
 def verify_email(token: str):
-    # user = user_collection.find_one({"verification_token": token})
-    # if not user:
-    #     raise HTTPException(status_code=400, detail="Invalid verification token")
-    
-    # if user.get("token_expiry") and user["token_expiry"] < datetime.now(timezone.utc):
-    #     return JSONResponse(status_code=400, content={"sucess": False, "error": "Verification link expired"})
-    # if user["token_expiry"] < datetime.now(timezone.utc):
-    #     raise JSONResponse(status_code=400, content={"success": False, "error": "Verification link expired"})
+    user = user_collection.find_one({"verification_token": token})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid verification token")
 
-    # user_collection.update_one(
-    #     {"_id": user["_id"]},
-    #     {
-    #         "$set": {"is_verified": True}, 
-    #         "$unset": {"verification_token": "", "token_expiry": ""}
-    #     }
-    # )
-    # # return RedirectResponse("https://www.findmygadget.shop/verify-success.html")
-    # return {"message": "Email verified successfully"}
-    try:
-        # decode the token
-        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=400, detail="Invalid token")
+    if user.get("token_expiry") and user["token_expiry"] < datetime.now(timezone.utc):
+        return JSONResponse(status_code=400, content={"success": False, "error": "Verification link expired"})
 
-        # update the user in DB
-        result = user_collection.update_one(
-            {"email": email},
-            {"$set": {"is_verified": True, "verified_at": datetime.now(timezone.utc)}}
-        )
+    user_collection.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {"is_verified": True, "verified_at": datetime.now(timezone.utc)},
+            "$unset": {"verification_token": "", "token_expiry": ""}
+        }
+    )
 
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        return JSONResponse({"success": True, "message": "Email verified successfully!"})
-
-    except JWTError:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
-
-    except Exception as e:
-        # Catch all unexpected errors, avoids 500 HTML page
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    return JSONResponse({"success": True, "message": "Email verified successfully!"})
 
 @app.post("/login")
 def login(user: UserLogin):
