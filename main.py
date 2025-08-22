@@ -18,6 +18,7 @@ from uuid import uuid4
 import secrets
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 import asyncio
+import random
 
 load_dotenv()
 
@@ -162,19 +163,17 @@ def gadget_assist(request: QueryRequest, authorization: Optional[str] = Header(N
             content={"error": "Internal server error", "details": str(e)},
         )
     
-def generate_verification_token():
-    return secrets.token_urlsafe(32)
+# def generate_verification_token():
+#     return secrets.token_urlsafe(32)
 
-async def send_verification_email(email: str, token: str):
-    verify_link = f"https://findmygadget.shop/verify.html?token={token}"
+async def send_otp_email(email: str, otp: str):
     message = MessageSchema(
         subject="Verify your FindMyGadget Account",
         recipients=[email],
         body=f"""
             <p>Hi!</p>
-            <p>Click the link below to verify your email and activate your account:</p>
-            <a href="{verify_link}">Verify Email</a>
-            <p>This link will expire in 1 hour.</p>
+            <p>Your OTP code is: <b>{otp}</b></p>
+            <p>This code will expire in 10 minutes.</p>
         """,
         subtype="html"
     )
@@ -187,52 +186,73 @@ async def signup(user: UserCreate):
         raise HTTPException(status_code=400, detail="Email already exist")
     
     hashed_pw = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
-    token = generate_verification_token()
+
+    otp = str(random.randint(100000, 999999))
+    otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
 
     user_data = {
         "name": user.name,
         "email": user.email,
         "password": hashed_pw,
         "created_at": datetime.now(timezone.utc),
-        "token_expiry": datetime.now(timezone.utc) + timedelta(hours=1),
-        "verification_token": token,
+        "otp": otp,
+        "otp_expiry": otp_expiry,
         "is_verified": False
     }
     user_collection.insert_one(user_data)
 
-    # verify_link = f"https://www.findmygadget.shop/verify/{token}"
-    # print(f"Verification link (send via email): {verify_link}")
-    await send_verification_email(user.email, token)
-
-    # token_data = {
-    #     "sub": user.email,
-    #     "exp": datetime.now(timezone.utc) + timedelta(hours=12)   
-    # }
-    # access_token = jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    # return {
-    #     "msg": "Signup Successful",
-    #     "token_type": "bearer",
-    #     "access_token": access_token
-    # }
+    await send_otp_email(user.email, otp)
     return {"msg": "Signup successfull, please verify your email before logging in."}
 
-@app.get("/verify/{token}")
-def verify_email(token: str):
-    user = user_collection.find_one({"verification_token": token})
-    if not user:
-        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid verification link"})
+@app.post("/verify-otp")
+def verify_otp(data: dict):
+    email = data.get("email")
+    otp = data.get("otp")
 
-    if user.get("token_expiry") and user["token_expiry"] < datetime.now(timezone.utc):
-        user_collection.update_one({"_id": user["_id"]}, {"$unset": {"verification_token": "", "token_expiry": ""}})
-        return JSONResponse(status_code=400, content={"success": False, "error": "Verification link expired"})
+    if not email or not otp:
+        raise HTTPException(status_code=400, detail="Email and OTP are required")
+    
+    user = user_collection.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.get("is_verified"):
+        return {"success": True, "message": "Email already verified"}
+
+    if user.get("otp") != otp:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Invalid OTP"})
+
+    if user.get("otp_expiry") < datetime.now(timezone.utc):
+        return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
+    
+    user_collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"is_verified": True, "verified_at": datetime.now(timezone.utc)},
+         "$unset": {"otp": "", "otp_expiry": ""}}
+    )
+
+    return {"success": True, "message": "Email verified successfully"}
+
+@app.post("/resend-otp")
+async def resend_otp(data: dict):
+    email = data.get("email")
+    user = user_collection.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.get("is_verified"):
+        return {"success": False, "error": "User already verified"}
+    
+    otp = str(random.randint(100000, 999999))
+    otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
 
     user_collection.update_one(
         {"_id": user["_id"]},
-        {"$set": {"is_verified": True, "verified_at": datetime.now(timezone.utc)}},
-        {"$unset": {"verification_token": "", "token_expiry": ""}}
+        {"$set": {"otp": otp, "otp_expiry": otp_expiry}}
     )
 
-    return JSONResponse(status_code=200, content={"success": True, "message": "Email verified successfully"})
+    await send_otp_email(email, otp)
+    return {"success": True, "message": "OTP resent successfully"}
 
 @app.post("/login")
 def login(user: UserLogin):
