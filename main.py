@@ -90,6 +90,15 @@ class VerifyOTPRequest(BaseModel):
 class ResendOTPRequest(BaseModel):
     email: str
 
+class VerifyResetOTPRequest(BaseModel):
+    email: str
+    otp: str
+
+class ResetPassword(BaseModel):
+    email: str
+    otp: str
+    new_password: str
+
 def decode_token(token: str):
     try:
         return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
@@ -260,29 +269,6 @@ async def resend_otp(data: ResendOTPRequest):
 
 @app.post("/login")
 def login(user: UserLogin):
-    # user_data = user_collection.find_one({"email": user.email})
-
-    # if not user_data or not bcrypt.checkpw(user.password.encode('utf-8'), user_data["password"]):
-    #     raise HTTPException(status_code=401, detail="Invalid email or password")
-    
-    # if not user_data.get("is_verified", False):
-    #     raise HTTPException(status_code=403, detail="Email not verified. Please check your inbox.")
-    
-    # payload = {
-    #     "sub": str(user_data["_id"]),
-    #     "email": user_data["email"],
-    #     "exp": datetime.now(timezone.utc) + timedelta(seconds=JWT_EXPIRY_SECONDS)
-    # }
-    # token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-    # return {
-    #     "access_token": token,
-    #     "token_type": "bearer",
-    #     "user": {
-    #         "name": user_data["name"],
-    #         "email": user_data["email"]
-    #     }
-    # }
     user_data = user_collection.find_one({"email": user.email})
     if not user_data or not bcrypt.checkpw(user.password.encode('utf-8'), user_data["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -398,6 +384,57 @@ def google_callback(request: Request):
     # Redirect or respond with session info
     return RedirectResponse(f"https://findmygadget.shop/chat.html?token={token}", status_code=302)
 
+@app.post("/forget-password")
+async def forget_password(data: ResendOTPRequest):
+    user = user_collection.find_one({"email": data.email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    otp = str(random.randint(100000, 999999))
+    otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+    user_collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"reset_otp": otp, "reset_otp_expiry": otp_expiry}}
+    )
+
+    await send_otp_email(data.email, otp)
+    return {"success": True, "message": "OTP sent to your email. It will expire in 10 minutes"}
+
+@app.post("/verify-reset-otp")
+def verify_reset_otp(data: VerifyResetOTPRequest):
+    user = user_collection.find_one({"email": data.email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.get("reset_otp") != data.otp:
+        raise JSONResponse(status_code=404, content={"success": False, "error": "Invalid OTP"})
+    
+    if user.get("reset_otp_expiry") < datetime.now(timezone.utc):
+        return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
+    
+    return {"success": True, "message": "OTP verified. You can now reset your password."}
+
+@app.post("/reset-password")
+def reset_password(data: ResetPassword):
+    user = user_collection.find_one({"email": data.email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.get("reset_otp") != data.otp:
+        raise JSONResponse(status_code=400, content={"success": False, "error": "Invalid OTP"})
+    
+    if user.get("reset_otp_expiry") < datetime.now(timezone.utc):
+        return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
+    
+    hashed_pw = bcrypt.hashpw(data.new_password.encode('utf-8'), bcrypt.gensalt())
+
+    user_collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"password": hashed_pw}, "$unset": {"reset_otp": "", "reset_otp_request": ""}}
+    )
+
+    return {"success": True, "message": "Password reset successfully. You can now login with new password."}
 
 if __name__ == "__main__":
     import uvicorn
