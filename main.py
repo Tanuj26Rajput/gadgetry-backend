@@ -226,8 +226,13 @@ def verify_otp(data: VerifyOTPRequest):
         if user.get("otp") != data.otp:
             return JSONResponse(status_code=400, content={"success": False, "error": "Invalid OTP"})
 
-        if user.get("otp_expiry") < datetime.now(timezone.utc):
-            return JSONResponse(status_code=400, content={"success": False, "error": "Invalid OTP"})
+        expiry = user.get("otp_expiry")
+        if expiry:
+            if expiry.izinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+
+            if expiry < datetime.now(timezone.utc):
+                return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
 
         user_collection.update_one(
             {"_id": user["_id"]},
