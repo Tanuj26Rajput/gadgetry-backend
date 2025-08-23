@@ -410,8 +410,15 @@ def verify_reset_otp(data: VerifyResetOTPRequest):
     if user.get("reset_otp") != data.otp:
         raise JSONResponse(status_code=404, content={"success": False, "error": "Invalid OTP"})
     
-    if user.get("reset_otp_expiry") < datetime.now(timezone.utc):
-        return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
+    # if user.get("reset_otp_expiry") < datetime.now(timezone.utc):
+    #     return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
+    expiry = user.get("reset_otp_expiry")
+    if expiry:
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+
+        if expiry < datetime.now(timezone.utc):
+            return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
     
     return {"success": True, "message": "OTP verified. You can now reset your password."}
 
@@ -424,8 +431,15 @@ def reset_password(data: ResetPassword):
     if user.get("reset_otp") != data.otp:
         raise JSONResponse(status_code=400, content={"success": False, "error": "Invalid OTP"})
     
-    if user.get("reset_otp_expiry") < datetime.now(timezone.utc):
-        return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
+    # if user.get("reset_otp_expiry") < datetime.now(timezone.utc):
+    #     return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
+    expiry = user.get("reset_otp_expiry")
+    if expiry:
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+
+        if expiry < datetime.now(timezone.utc):
+            return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
     
     hashed_pw = bcrypt.hashpw(data.new_password.encode('utf-8'), bcrypt.gensalt())
 
@@ -440,3 +454,11 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+
+# expiry = user.get("otp_expiry")
+#         if expiry:
+#             if expiry.tzinfo is None:
+#                 expiry = expiry.replace(tzinfo=timezone.utc)
+
+#             if expiry < datetime.now(timezone.utc):
+#                 return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
