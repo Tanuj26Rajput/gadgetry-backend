@@ -454,11 +454,3 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
-
-# expiry = user.get("otp_expiry")
-#         if expiry:
-#             if expiry.tzinfo is None:
-#                 expiry = expiry.replace(tzinfo=timezone.utc)
-
-#             if expiry < datetime.now(timezone.utc):
-#                 return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
