@@ -228,7 +228,7 @@ def verify_otp(data: VerifyOTPRequest):
 
         expiry = user.get("otp_expiry")
         if expiry:
-            if expiry.izinfo is None:
+            if expiry.tzinfo is None:
                 expiry = expiry.replace(tzinfo=timezone.utc)
 
             if expiry < datetime.now(timezone.utc):
