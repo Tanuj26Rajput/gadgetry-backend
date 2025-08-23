@@ -87,7 +87,7 @@ class VerifyOTPRequest(BaseModel):
     email: str
     otp: str
 
-class ResentOTPRequest(BaseModel):
+class ResendOTPRequest(BaseModel):
     email: str
 
 def decode_token(token: str):
@@ -215,41 +215,6 @@ async def signup(user: UserCreate):
 
 @app.post("/verify-otp")
 def verify_otp(data: VerifyOTPRequest):
-    # try:
-    #     user = user_collection.find_one({"email": data.email})
-    #     email = data.get("email")
-    #     otp = data.get("otp")
-
-    #     if not email or not otp:
-    #         raise HTTPException(status_code=400, detail="Email and OTP are required")
-        
-    #     user = user_collection.find_one({"email": email})
-    #     if not user:
-    #         raise HTTPException(status_code=404, detail="User not found")
-        
-    #     if user.get("is_verified"):
-    #         return {"success": True, "message": "Email already verified"}
-
-    #     if user.get("otp") != otp:
-    #         return JSONResponse(status_code=400, content={"success": False, "error": "Invalid OTP"})
-
-    #     if user.get("otp_expiry") < datetime.now(timezone.utc):
-    #         return JSONResponse(status_code=400, content={"success": False, "error": "OTP expired"})
-        
-    #     user_collection.update_one(
-    #         {"_id": user["_id"]},
-    #         {
-    #             "$set": {"is_verified": True, "verified_at": datetime.now(timezone.utc)},
-    #             "$unset": {"otp": 1, "otp_expiry": 1}}
-    #     )
-
-    #     return {"success": True, "message": "Email verified successfully"}
-    # except Exception as e:
-    #     print("🔥 ERROR in /verify-otp:", traceback.format_exc())
-    #     return JSONResponse(
-    #         status_code=500,
-    #         content={"success": False, "error": "Internal server error", "details": str(e)}
-    #     )
     try:
         user = user_collection.find_one({"email": data.email})
         if not user:
@@ -261,7 +226,7 @@ def verify_otp(data: VerifyOTPRequest):
         if user.get("otp") != data.otp:
             return JSONResponse(status_code=400, content={"success": False, "error": "Invalid OTP"})
 
-        if user.get("otp") != data.otp:
+        if user.get("otp_expiry") < datetime.now(timezone.utc):
             return JSONResponse(status_code=400, content={"success": False, "error": "Invalid OTP"})
 
         user_collection.update_one(
@@ -275,25 +240,7 @@ def verify_otp(data: VerifyOTPRequest):
         return JSONResponse(status_code=500, content={"success": False, "error": "Internal server error"})
 
 @app.post("/resend-otp")
-async def resend_otp(data: dict):
-    # email = data.get("email")
-    # user = user_collection.find_one({"email": email})
-    # if not user:
-    #     raise HTTPException(status_code=404, detail="User not found")
-    
-    # if user.get("is_verified"):
-    #     return {"success": False, "error": "User already verified"}
-    
-    # otp = str(random.randint(100000, 999999))
-    # otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
-
-    # user_collection.update_one(
-    #     {"_id": user["_id"]},
-    #     {"$set": {"otp": otp, "otp_expiry": otp_expiry}}
-    # )
-
-    # await send_otp_email(email, otp)
-    # return {"success": True, "message": "OTP resent successfully"}
+async def resend_otp(data: ResendOTPRequest):
     user = user_collection.find_one({"email": data.email})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
