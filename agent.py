@@ -76,18 +76,19 @@ prompt_recommend = PromptTemplate(
         You are an expert electronic gadget assistant providing professional and courteous recommendations.
 
         Given:
-        - A list of electronic products (with price, rating, and review sentiment),
+        - A list of electronic products (with price, rating, review count, positivity percentage and final weighted score),
         - The user's budget,
         - The product category (e.g., laptop, mobile),
         - The user's intended use case (e.g., gaming, video editing, general use),
 
         Your task:
         1. Analyze the products carefully based on:
-           - Suitability for the use case
-           - Review sentiment (prioritize more positive, fewer negative),
+           - **Final Weighted Score** (most important: reliability of reviews),
+           - Suitability for the use case,
+           - Percentage of positive reviews (secondary factor),
+           - Number of reviews (prefer more reviews if scores are close),
            - Prioritize products **within the original budget**,
-           - If no strong option is available within the budget, consider products slightly over budget(within the Flexible budget),
-           - User ratings and feedbacks.
+           - If none are strong, allow products slightly over budget (within Flexible budget).
 
         2. Select the **Top 3 products** from the list, and clearly rank them as:
            🥇 Best Overall - balanced choice for most users,
@@ -97,7 +98,7 @@ prompt_recommend = PromptTemplate(
         3. For each recommendation, provide:
            - Key strengths of the product,
            - Why it stands out compared to others,
-           - Approximate percentage of positive reviews (based on given sentiment),
+           - Final Weighted Score + positivity percentage + review count summary,
            - Mention clearly whether it is "within budget" OR "slightly over budget (but worth it)".
            - **DIRECT CLICKABLE PRODUCT LINK** (use the one from the product list).
 
@@ -217,6 +218,14 @@ def batch_sentiment_analysis(product_reviews):
         return json.loads(result_text)
     except:
         return {}
+
+def compute_weighted_score(positive, total, m=50, C=70):
+    if total == 0:
+        return 0
+    R = (positive / total) * 100
+    v = total
+    score = (v / (v + m)) * R + (m / (v + m)) * C
+    return round(score, 2)
     
 def add_affiliate_tag(url: str, tag: str) -> str:
     if not url:
@@ -282,9 +291,12 @@ async def product_async(state: agentstate):
     sentiments = batch_sentiment_analysis(all_reviews)
 
     for idx, p in enumerate(filtered_products):
-        p["review_sentiment"] = sentiments.get(str(idx), {
-            "positive": 0, "negative": 0, "neutral": 0, "total": 0
-        })
+        sentiment = sentiments.get(str(idx), {"positive": 0, "negative": 0, "neutral": 0, "total": 0})
+        p["review_sentiment"] = sentiment
+        p["positive_percent"] = ((sentiment['positive'] / sentiment['total']) * 100) if sentiment['total'] > 0 else 0
+        p["final_score"] = compute_weighted_score(
+            sentiment["positive"], sentiment["total"]
+        )
 
     state['product_list'] = filtered_products
     return state
@@ -346,8 +358,12 @@ def recommendation(state: agentstate) -> agentstate:
         )
         return state
     
+    sorted_products = sorted(
+        state["product_list"], key=lambda x: x.get("final_score", 0), reverse=True
+    )
+    
     product_list_str = "\n".join([
-        f"{p['title']} | {p['price']} | {p['original_price']} | {p['rating']}⭐ | {p['review_sentiment']['positive']}👍 | {p['review_sentiment']['negative']}👎 | {p['url']}"
+        f"{p['title']} | {p['price']} | {p['original_price']} | {p['rating']}⭐ | {p['review_sentiment']['positive']}👍 | {p['review_sentiment']['negative']}👎 | {round(p.get('positivity_percent', 0), 2)}% positive | {p['url']}"
         for p in state['product_list']
     ])
 
