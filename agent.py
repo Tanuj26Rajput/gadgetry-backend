@@ -219,7 +219,7 @@ def batch_sentiment_analysis(product_reviews):
     except:
         return {}
 
-def compute_weighted_score(positive, total, m=50, C=70):
+def compute_weighted_score(positive, total, m=100, C=70):
     if total == 0:
         return 0
     R = (positive / total) * 100
@@ -295,7 +295,9 @@ async def product_async(state: agentstate):
         p["review_sentiment"] = sentiment
         p["positive_percent"] = ((sentiment['positive'] / sentiment['total']) * 100) if sentiment['total'] > 0 else 0
         p["final_score"] = compute_weighted_score(
-            sentiment["positive"], sentiment["total"]
+            sentiment["positive"], sentiment["total"],
+            m = 100,
+            C = 70
         )
 
     state['product_list'] = filtered_products
@@ -363,8 +365,8 @@ def recommendation(state: agentstate) -> agentstate:
     )
     
     product_list_str = "\n".join([
-        f"{p['title']} | {p['price']} | {p['original_price']} | {p['rating']}⭐ | {p['review_sentiment']['positive']}👍 | {p['review_sentiment']['negative']}👎 | {round(p.get('positivity_percent', 0), 2)}% positive | {p['url']}"
-        for p in state['product_list']
+        f"{p['title']} | {p['price']} | {p['original_price']} | {p['rating']}⭐ | {p['review_sentiment']['positive']}👍 | {p['review_sentiment']['negative']}👎 | {round(p.get('positivity_percent', 0), 2)}% positive | Final Score: {p['final_score']} | {p['url']}"
+        for p in sorted_products
     ])
 
     prompt_text = prompt_recommend.format(
