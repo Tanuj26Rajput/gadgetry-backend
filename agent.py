@@ -169,7 +169,7 @@ def response_to_non_gadget(state: agentstate) -> agentstate:
 
 async def fetch_reviews_async(session, asin):
     if not asin:
-        return []
+        return {"reviews": [], "total_count": 0}
     url = "https://real-time-amazon-data.p.rapidapi.com/product-reviews"
     headers = {
         "x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
@@ -187,20 +187,28 @@ async def fetch_reviews_async(session, asin):
         except Exception as e:
             text = await resp.text()
             print(f"❌ JSON parse error: {e} | Response text: {text[:200]}")
-            return []
+            return {"reviews": [], "total_count": 0}
         
         if not isinstance(data, dict):
             print(f"❌ API returned non-JSON data: {data}")
-            return []
+            return {"reviews": [], "total_count": 0}
         
-        reviews = data.get("data", {}).get("reviews", [])
-        return [r.get("review_text", "") for r in reviews if isinstance(r, dict)]
+        api_data = data.get("data", {})
+        reviews = api_data.get("reviews", [])
+        # Try to get total review count from API response
+        total_count = api_data.get("total_reviews", api_data.get("review_count", api_data.get("total", 0)))
+        return {
+            "reviews": [r.get("review_text", "") for r in reviews if isinstance(r, dict)],
+            "total_count": total_count if isinstance(total_count, (int, float)) else 0
+        }
     
 def extract_asin(url: str) -> str:
     match = re.search(r'/dp/([A-Z0-9]{10})', url)
     return match.group(1) if match else ""
 
 def batch_sentiment_analysis(product_reviews):
+    if not product_reviews or all(not reviews for reviews in product_reviews):
+        return {}
     prompt = '''
         You are a sentiment classifier. For each product, return counts in JSON:
         {
@@ -209,9 +217,11 @@ def batch_sentiment_analysis(product_reviews):
         Reviews grouped per product index:
     '''
     for idx, reviews in enumerate(product_reviews):
-        prompt += f"\nProduct {idx}:\n"
-        for r in reviews:
-            prompt += f"- {r}"
+        if reviews:  # Only add if there are reviews
+            prompt += f"\nProduct {idx}:\n"
+            for r in reviews:
+                if r:  # Only add non-empty reviews
+                    prompt += f"- {r}\n"
     
     result_text = gemi_invoke(prompt)
     try:
@@ -282,11 +292,16 @@ async def product_async(state: agentstate):
                 "url": add_affiliate_tag(p.get("product_url"), os.getenv("AFFILIATE_TAG")),
                 "rating": p.get("product_star_rating", "N/A"),
                 "image": p.get("product_photo", "N/A"),
-                "asin": asin
+                "asin": asin,
+                "review_count": next((p.get(key) for key in ["product_review_count", "product_total_reviews", "product_rating_count"] if key in p and p[key] is not None), 0)
             })
             tasks.append(fetch_reviews_async(session, asin))
 
-        all_reviews = await asyncio.gather(*tasks)
+        all_reviews_data = await asyncio.gather(*tasks)
+    
+    # Extract reviews and review counts
+    all_reviews = [rd.get("reviews", []) if isinstance(rd, dict) else (rd if isinstance(rd, list) else []) for rd in all_reviews_data]
+    review_counts = [rd.get("total_count", 0) if isinstance(rd, dict) else 0 for rd in all_reviews_data]
     
     sentiments = batch_sentiment_analysis(all_reviews)
 
@@ -294,6 +309,9 @@ async def product_async(state: agentstate):
         sentiment = sentiments.get(str(idx), {"positive": 0, "negative": 0, "neutral": 0, "total": 0})
         p["review_sentiment"] = sentiment
         p["positive_percent"] = ((sentiment['positive'] / sentiment['total']) * 100) if sentiment['total'] > 0 else 0
+        # Use review count from reviews API, then product API, then sentiment analysis total
+        api_review_count = review_counts[idx] if idx < len(review_counts) else 0
+        p["total_reviews"] = api_review_count if api_review_count > 0 else (p.get("review_count", 0) if p.get("review_count", 0) > 0 else sentiment['total'])
         p["final_score"] = compute_weighted_score(
             sentiment["positive"], sentiment["total"],
             m = 100,
@@ -365,7 +383,7 @@ def recommendation(state: agentstate) -> agentstate:
     )
     
     product_list_str = "\n".join([
-        f"{p['title']} | {p['price']} | {p['original_price']} | {p['rating']}⭐ | {p['review_sentiment']['positive']}👍 | {p['review_sentiment']['negative']}👎 | {round(p.get('positivity_percent', 0), 2)}% positive | Final Score: {p['final_score']} | {p['url']}"
+        f"{p['title']} | {p['price']} | {p['original_price']} | {p['rating']}⭐ | {p.get('total_reviews', 0)} reviews | {p['review_sentiment']['positive']}👍 | {p['review_sentiment']['negative']}👎 | {round(p.get('positive_percent', 0), 2)}% positive | Final Score: {p['final_score']} | {p['url']}"
         for p in sorted_products
     ])
 
