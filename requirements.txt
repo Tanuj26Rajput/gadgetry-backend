@@ -10,6 +10,7 @@ langgraph
 langchain
 langchain-core
 google-genai
+langchain-huggingface
 aiohttp
 asyncio
 fastapi-mail
