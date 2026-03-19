@@ -13,32 +13,32 @@ from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 
 load_dotenv()
 
-# client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-# def gemi_invoke(prompt: str) -> str:
-#     try:
-#         response = client_gemini.models.generate_content(
-#             model = "gemini-2.0-flash",
-#             contents=prompt
-#         )
-#         return response.text.strip()
-#     except Exception as e:
-#         print("Gemini API Error: ", e)
-#         return ""
-
-llm = HuggingFaceEndpoint(
-    repo_id="Qwen/Qwen3.5-35B-A3B",
-    task="text-generation",
-)
-model = ChatHuggingFace(llm=llm)
+client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def gemi_invoke(prompt: str) -> str:
     try:
-        response = model.invoke(prompt)
-        return response.content.strip()
+        response = client_gemini.models.generate_content(
+            model = "gemini-2.0-flash",
+            contents=prompt
+        )
+        return response.text.strip()
     except Exception as e:
-        print("Hugging Face API Error: ", e)
+        print("Gemini API Error: ", e)
         return ""
+
+# llm = HuggingFaceEndpoint(
+#     repo_id="Qwen/Qwen3.5-35B-A3B",
+#     task="text-generation",
+# )
+# model = ChatHuggingFace(llm=llm)
+
+# def gemi_invoke(prompt: str) -> str:
+#     try:
+#         response = model.invoke(prompt)
+#         return response.content.strip()
+#     except Exception as e:
+#         print("Hugging Face API Error: ", e)
+#         return ""
 
 class agentstate(TypedDict):
     query: str
