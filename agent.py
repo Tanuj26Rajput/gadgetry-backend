@@ -195,11 +195,31 @@ async def fetch_reviews_async(session, asin):
         
         api_data = data.get("data", {})
         reviews = api_data.get("reviews", [])
-        # Try to get total review count from API response
-        total_count = api_data.get("total_reviews", api_data.get("review_count", api_data.get("total", 0)))
+        
+        # Debug: Print API response structure to see available fields
+        print(f"🔍 Reviews API Response Keys: {list(api_data.keys())}")
+        print(f"🔍 Reviews API Full Data Sample: {json.dumps({k: v for k, v in list(api_data.items())[:5]}, indent=2, default=str)}")
+        
+        # Try to get total review count from API response - check multiple possible locations
+        total_count = 0
+        # Check in data.data
+        if "total_reviews" in api_data:
+            total_count = api_data["total_reviews"]
+        elif "review_count" in api_data:
+            total_count = api_data["review_count"]
+        elif "total" in api_data:
+            total_count = api_data["total"]
+        # Check in root data
+        elif "total_reviews" in data:
+            total_count = data["total_reviews"]
+        elif "review_count" in data:
+            total_count = data["review_count"]
+        
+        print(f"🔍 Reviews API - Found {len(reviews)} reviews, total_count: {total_count}")
+        
         return {
             "reviews": [r.get("review_text", "") for r in reviews if isinstance(r, dict)],
-            "total_count": total_count if isinstance(total_count, (int, float)) else 0
+            "total_count": total_count if isinstance(total_count, (int, float)) and total_count > 0 else 0
         }
     
 def extract_asin(url: str) -> str:
@@ -279,12 +299,32 @@ async def product_async(state: agentstate):
             data = await resp.json()
             products = data.get("data", {}).get("products", [])
         
+        # Debug: Print first product structure to see available fields
+        if products:
+            first_product = products[0]
+            print(f"🔍 Product Search API - First Product Keys: {list(first_product.keys())}")
+            # Check for review count related fields
+            review_fields = {k: v for k, v in first_product.items() if 'review' in k.lower() or 'rating' in k.lower() or 'count' in k.lower()}
+            print(f"🔍 Product Search API - Review/Rating/Count Fields: {review_fields}")
+        
         tasks = []
         filtered_products = []
-        for p in products:
+        for idx, p in enumerate(products):
             asin = extract_asin(p.get("product_url", ""))
             if not asin:
                 continue
+            
+            # Try to find review count in product data
+            review_count = 0
+            possible_keys = ["product_review_count", "product_total_reviews", "product_rating_count", 
+                           "review_count", "total_reviews", "rating_count", "reviews_count"]
+            for key in possible_keys:
+                if key in p and p[key] is not None:
+                    review_count = p[key]
+                    if idx == 0:  # Debug for first product
+                        print(f"🔍 Found review_count in field '{key}': {review_count}")
+                    break
+            
             filtered_products.append({
                 "title": p.get("product_title"),
                 "price": p.get("product_minimum_offer_price"),
@@ -293,7 +333,7 @@ async def product_async(state: agentstate):
                 "rating": p.get("product_star_rating", "N/A"),
                 "image": p.get("product_photo", "N/A"),
                 "asin": asin,
-                "review_count": next((p.get(key) for key in ["product_review_count", "product_total_reviews", "product_rating_count"] if key in p and p[key] is not None), 0)
+                "review_count": review_count
             })
             tasks.append(fetch_reviews_async(session, asin))
 
@@ -311,7 +351,27 @@ async def product_async(state: agentstate):
         p["positive_percent"] = ((sentiment['positive'] / sentiment['total']) * 100) if sentiment['total'] > 0 else 0
         # Use review count from reviews API, then product API, then sentiment analysis total
         api_review_count = review_counts[idx] if idx < len(review_counts) else 0
-        p["total_reviews"] = api_review_count if api_review_count > 0 else (p.get("review_count", 0) if p.get("review_count", 0) > 0 else sentiment['total'])
+        product_review_count = p.get("review_count", 0)
+        sentiment_total = sentiment['total']
+        
+        # Debug for first product
+        if idx == 0:
+            print(f"🔍 Product {idx} Review Count Sources:")
+            print(f"   - Reviews API total_count: {api_review_count}")
+            print(f"   - Product API review_count: {product_review_count}")
+            print(f"   - Sentiment analysis total: {sentiment_total}")
+        
+        # Priority: reviews API > product API > sentiment total
+        if api_review_count > 0:
+            p["total_reviews"] = api_review_count
+        elif product_review_count > 0:
+            p["total_reviews"] = product_review_count
+        else:
+            p["total_reviews"] = sentiment_total
+        
+        if idx == 0:
+            print(f"   - Final total_reviews: {p['total_reviews']}")
+        
         p["final_score"] = compute_weighted_score(
             sentiment["positive"], sentiment["total"],
             m = 100,
