@@ -15,16 +15,32 @@ load_dotenv()
 
 client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
+# def gemi_invoke(prompt: str) -> str:
+#     try:
+#         response = client_gemini.models.generate_content(
+#             model = "gemini-1.5-flash",
+#             contents=prompt
+#         )
+#         return response.text.strip()
+#     except Exception as e:
+#         print("Gemini API Error: ", e)
+#         return ""
+
 def gemi_invoke(prompt: str) -> str:
     try:
         response = client_gemini.models.generate_content(
-            model = "gemini-2.0-flash",
+            model="gemini-1.5-flash",
             contents=prompt
         )
+
+        if not response or not response.text:
+            return "fallback"   # ✅ safety
+
         return response.text.strip()
+
     except Exception as e:
-        print("Gemini API Error: ", e)
-        return ""
+        print("Gemini API Error:", e)
+        return "fallback"   # ✅ NEVER ""
 
 # llm = HuggingFaceEndpoint(
 #     repo_id="Qwen/Qwen3.5-35B-A3B",
@@ -169,10 +185,27 @@ def handle_greeting(state: agentstate) -> agentstate:
     state['recommendation'] = "Hello! How can I assist you with gadgets today?"
     return state
 
+# def check_is_gadget_query(state: agentstate) -> str:
+#     result = gemi_invoke(prompt_is_gadget.format(query=state['query']))
+#     result = result.strip().lower()
+#     return result
+
 def check_is_gadget_query(state: agentstate) -> str:
     result = gemi_invoke(prompt_is_gadget.format(query=state['query']))
-    result = result.strip().lower()
-    return result
+    
+    result = (result or "").strip().lower()
+
+    # Debug
+    print("LLM RAW OUTPUT:", result)
+
+    # Normalize aggressively
+    if result.startswith("yes"):
+        return "yes"
+    if result.startswith("no"):
+        return "no"
+
+    # Handle fallback / garbage
+    return "no"
 
 def is_gadget_query(state: agentstate) -> agentstate:
     return state
