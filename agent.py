@@ -29,7 +29,7 @@ client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 def gemi_invoke(prompt: str) -> str:
     try:
         response = client_gemini.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.5-flash",
             contents=prompt
         )
 
