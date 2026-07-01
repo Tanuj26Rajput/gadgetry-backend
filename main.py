@@ -174,9 +174,10 @@ def gadget_assist(request: QueryRequest, authorization: Optional[str] = Header(N
             "product_list": result["product_list"],
             "session_id": composite_session_id
         }
-    
+    except HTTPException:
+        raise
     except Exception as e:
-        print("🔥 ERROR in /gadget-assist:", traceback.format_exc())
+        print("[ERROR] in /gadget-assist:", traceback.format_exc())
         return JSONResponse(
             status_code=500,
             content={"error": "Internal server error", "details": str(e)},
