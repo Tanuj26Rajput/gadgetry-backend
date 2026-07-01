@@ -121,17 +121,21 @@ def gadget_assist(request: QueryRequest, authorization: Optional[str] = Header(N
             payload = decode_token(token)
             user_email = payload.get("email")
 
-        if not user_email:
-            return JSONResponse(status_code=403, content={"error": "Authentication required"})
-        
-        user_doc = user_collection.find_one({"email": user_email})
-        if not user_doc:
-            return JSONResponse(status_code=403, content={"error": "User not found"})
-        
-        if not user_doc.get("is_verified", False):
-            return JSONResponse(status_code=403, content={"error": "Email not verified. Please verify your account before chatting"})
-        
-        composite_session_id = f"{user_email}__{session_id}"
+        if user_email:
+            # Authenticated user flow
+            user_doc = user_collection.find_one({"email": user_email})
+            if not user_doc:
+                return JSONResponse(status_code=403, content={"error": "User not found"})
+            
+            if not user_doc.get("is_verified", False):
+                return JSONResponse(status_code=403, content={"error": "Email not verified. Please verify your account before chatting"})
+            
+            composite_session_id = f"{user_email}__{session_id}"
+            user_email_for_session = user_email
+        else:
+            # Guest user flow
+            composite_session_id = f"guest__{session_id}"
+            user_email_for_session = "guest"
 
         session = session_collection.find_one({"session_id": composite_session_id})
 
@@ -144,19 +148,19 @@ def gadget_assist(request: QueryRequest, authorization: Optional[str] = Header(N
                 "product": "",
                 "product_list": [],
                 "recommendation": "",
-                "user_email": user_email,
+                "user_email": user_email_for_session,
                 "createdate": datetime.now(timezone.utc)
             }
         else:
             session.pop("_id", None)
             session_state: agentstate = session
-            session_state["user_email"] = user_email
+            session_state["user_email"] = user_email_for_session
 
         session_state['query'] = query
         result = workflow.invoke(session_state)
         
         result['session_id'] = composite_session_id
-        result["user_email"] = user_email
+        result["user_email"] = user_email_for_session
         result['createdate'] = datetime.now(timezone.utc)
         
         session_collection.update_one(
